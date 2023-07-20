@@ -1,0 +1,114 @@
+README for the IBM lin_tape driver
+Copyright (c) 2023 IBM Corp.
+
+The lin_tape driver is now released as a source RPM package.  The lin_taped daemon is released as a set of binary RPM packages, with a separate binary package for each architecture.  These files can be found in this folder.
+The kernels for which this driver is IBM certified are listed on the lin_tape.Readme file
+
+For Interoperability specifications go to SSIC:
+https://www-50.ibm.com/systems/support/storage/ssic/interoperability
+
+IBM does not guarantee correct operation of the lin_tape driver on any other kernel or operating system.
+
+Note on SLES distributions: Linux kernel modules may contain an internal "supported"
+flag which denotes that module as being officially supported by Novell. Beginning with SLES 11,
+modules such as lin_tape that do not contain this flag are prevented from being loaded
+(automatically or manually) by the modprobe command. This is the default configuration of SLES11
+servers, but loading unsupported modules can be allowed through one configuration change.  To allow
+the loading of unsupported modules in SLES11, set 'allow_unsupported_modules 1' in
+/etc/modprobe.d/unsupported-modules. After making this change, lin_tape will be allowed to load.
+
+To install the lin_tape driver with all the added value of the lin_taped daemon,
+perform the following steps:
+
+1 - Download the appropriate level of the source RPM package to a directory of
+your choice on the Linux kernel for which you wish to install it.
+
+2 - Run rpmbuild --rebuild <filename>, where filename is the name of the RPM
+file.  This will create a binary RPM package for your kernel from the source RPM
+package.
+
+For example:
+
+#rpmbuild --rebuild lin_tape-1.xx.0-1.src.rpm.
+
+3 - Output from the build will be printed to your screen.  Near the end of the
+output, you will find a line that indicates the filename and location of your
+binary RPM package.
+
+For example, a line similar to the following will be output to your screen:
+
+Wrote: /usr/src/redhat/RPMS/i386/lin_tape-1.xx.0-1.i386.rpm
+
+4 - To install the lin_tape driver from the binary package on RHEL or SLES, run
+rpm -ivh <filename> 
+
+For example:
+
+#rpm -ivh /usr/src/redhat/RPMS/i386/lin_tape-1.xx.0-1.i386.rpm
+
+To install the lin_tape driver from the binary package on Ubuntu use alien -i --scripts <filename> (starting on lin_tape version 3.0.24)
+
+For example:
+#sudo alien -i --scripts /usr/src/redhat/RPMS/x86_64/lin_tape-x.x.x-1.x_86_64.rpm
+
+5 - To install the lin_taped daemon, download it to your Linux filesystem and for RHEL and SLES
+run rpm -ivh on the daemon RPM file.
+
+For example:
+
+#rpm -ivh /usr/src/redhat/RPMS/i386/lin_taped-1.xx.0-rhel5.i386.rpm
+
+For Ubuntu run alien -i --scripts
+And then run sudo update-rc.d lin_tape defaults 
+For example:
+#sudo alien -i --scripts lin_taped-x.x.x-ubuntu.x86_84
+sudo update-rc.d lin_tape defaults
+
+For RoCE attachment scsi discovery shall be managed through iscsiadm after setting ethernet card port and eternet drive porth for both to have IP address (static or dynamic).
+
+Here an example:
+1) Where ens1d1 is the ethernet card port
+# ifconfig ens1d1
+ens1d1: flags=4163<UP,BROADCAST,RUNNING,MULTICAST>  mtu 1500
+        inet 10.0.1.11  netmask 255.255.255.0  broadcast 10.0.1.255
+2) Where ethernet drive port has IP 10.0.1.102
+]# ping 10.0.1.102
+PING 10.0.1.102 (10.0.1.102) 56(84) bytes of data.
+64 bytes from 10.0.1.102: icmp_seq=1 ttl=64 time=0.136 ms
+64 bytes from 10.0.1.102: icmp_seq=2 ttl=64 time=0.130 ms
+3)
+#iscsiadm -m discovery -t st -p 10.0.1.102 -I iser
+10.0.1.102:3260,-1 naa.500507630202e7d7
+4)
+#iscsiadm -m node -T naa.500507630202e7d7  -l
+5)
+# iscsiadm -m session
+iser: [1] 10.0.1.102:3260,1 naa.500507630202e7d7 (non-flash)
+6)
+# cat /proc/scsi/scsi
+Attached devices:
+Host: scsi9 Channel: 00 Id: 00 Lun: 00
+  Vendor: IBM      Model: 0359260F         Rev: 5516
+  Type:   Sequential-Access                ANSI  SCSI revision: 06
+
+Troubleshoot:
+1) Static or dynamic IP can be used, but collisions should be avoided. 
+The recommendation is to first use a static IP at one Mellanox port only 
+and one port drive attached for initial configuration.
+2) If ping does not work something is going wrong at ethernet configuration 
+3) if ping is working and step 3 is failing review firewall is disabled or 
+allows 3260 port. Make sure rdma service is running. And that RoCE v2 is in place.
+Here RHEL documentation around RDMA and RoCE v2 configuration: 
+https://access.redhat.com/documentation/en-us/red_hat_enterprise_linux/7/html/networking_guide/ch-configure_infiniband_and_rdma_networks#sec-Understanding_InfiniBand_and_RDMA_technologies
+
+Limitations: 
+* RHEL 6.x and Ubuntu .src.rpm do not use systemd but initd, if .src.rpm from RHEL7/8/9 or SLES is used on RHEL6 or Ubunutu installation will fail with something like:
+/var/tmp/rpm-tmp.s9rdym: line 3: systemctl: command not found
+* Block size bigger than 2M is not supported on kernels >= 2.6.29 and lin_tape versions previous to 2.9.9
+* 2.9.5 corrupts data at kernels  >= 2.6.29 when blocksize bigger than 1M is used, it is fixed at 2.9.6
+* Known race condition at SCSI error fixed at Kernel 2.6.32-504.el6 causes a crash or system hang
+  https://access.redhat.com/solutions/1231363
+* TS3310 Library:  Control Path Failover is supported.  However, there may be scenarios 
+  where manual intervention is required to reconfigure the failed path.  
+* Path Failover is not supported in environments where a single host server has installed HBAs 
+  using different HBA drivers.
